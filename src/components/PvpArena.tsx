@@ -16,10 +16,10 @@ interface FloatingText { id: number; text: string; type: 'damage'|'heal'|'shield
 interface PvpState {
   hp: number; shield: number; energy: number;
   drawPile: CardInstance[]; hand: CardInstance[]; discardPile: CardInstance[];
-  buffs: { poison: number; extraDraw: number; extraEnergy: number; nextAttackBonus: number; counter: number; weakness: number; };
+  buffs: { poison: number; extraDraw: number; extraEnergy: number; nextAttackBonus: number; counter: number; weakness: number; acid: boolean; alkali: boolean; strata: number; };
   
   oppHp: number; oppShield: number;
-  oppBuffs: { weakness: number; poison: number; counter: number; };
+  oppBuffs: { weakness: number; poison: number; counter: number; acid: boolean; alkali: boolean; strata: number; };
   
   turn: 'init' | 'self' | 'opponent' | 'gameover';
   timer: number;
@@ -44,10 +44,10 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
   const [state, setState] = useState<PvpState>({
     hp: 80, shield: 0, energy: 3,
     drawPile: [], hand: [], discardPile: [],
-    buffs: { poison: 0, extraDraw: 0, extraEnergy: 0, nextAttackBonus: 0, counter: 0, weakness: 0 },
+    buffs: { poison: 0, extraDraw: 0, extraEnergy: 0, nextAttackBonus: 0, counter: 0, weakness: 0, acid: false, alkali: false, strata: 0 },
     
     oppHp: 80, oppShield: 0,
-    oppBuffs: { weakness: 0, poison: 0, counter: 0 },
+    oppBuffs: { weakness: 0, poison: 0, counter: 0, acid: false, alkali: false, strata: 0 },
     
     turn: 'init', timer: 45, log: ['ルームに接続しました。同期中...'],
     floatingTexts: [], shakeTarget: null, whiteFlash: false, oppLunge: false,
@@ -100,14 +100,17 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
           s.oppLunge = true;
           setTimeout(() => setState(c => ({...c, oppLunge: false})), 300);
 
-          let { dmg, breakShield, applyWeakness } = payload;
+          let { dmg, breakShield, applyWeakness, pierce } = payload;
           
           if (breakShield && s.shield > 0) {
              s.shield = 0; s.log = ['相手の攻撃でシールドが破壊された！', ...s.log].slice(0, 10);
              addFloatingText(s, 'SHIELD BREAK!', 'crit', 'self');
           }
           
-          if (s.shield > 0) {
+          if (pierce) {
+            // シールドを無視して直接ダメージ
+            s.log = ['貫通ダメージを受けた！', ...s.log].slice(0, 10);
+          } else if (s.shield > 0) {
              const rem = s.shield - dmg;
              if (rem >= 0) { s.shield = rem; dmg = 0; }
              else { s.shield = 0; dmg = -rem; }
@@ -271,7 +274,7 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
       let s = { ...prev };
       s.energy -= node.card.cost;
       
-      let dmg = 0, shield = 0, heal = 0, isCrit = false, breakShield = false, applyWeakness = 0;
+      let dmg = 0, shield = 0, heal = 0, isCrit = false, breakShield = false, applyWeakness = 0, pierce = false;
       let logMsg = `自分は [${node.card.name}] を使用した。`;
 
       switch (node.id) {
@@ -294,6 +297,44 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
         case 'ner-3': shield = 15; s.buffs.counter = 15; break;
         case 'evo-1': dmg = 10; break;
         case 'evo-2': dmg = deck.length * 6; isCrit = true; break;
+        case 'chem-1': dmg = 5; s.buffs.acid = true; logMsg += ' 自身が酸性になった！'; break;
+        case 'chem-2': dmg = 5; s.buffs.alkali = true; logMsg += ' 自身がアルカリ性になった！'; break;
+        case 'chem-3': 
+          if (s.buffs.acid && s.buffs.alkali) {
+            dmg = 30; heal = 15; isCrit = true;
+            s.buffs.acid = false; s.buffs.alkali = false;
+            logMsg += ' 中和反応コンボ発動！特大ダメージ＆回復！';
+          } else {
+            logMsg += ' （酸性とアルカリ性が揃っていないため効果なし）';
+          }
+          break;
+        case 'phys-1': 
+          dmg = 6; 
+          s.buffs.extraDraw += 1; 
+          break;
+        case 'phys-2': 
+          dmg = 15; 
+          pierce = true; 
+          logMsg += ' 貫通ダメージ！'; 
+          break;
+        case 'phys-3': 
+          s.energy += 1; 
+          s.buffs.extraDraw += 1; 
+          break;
+        case 'earth-1': 
+          shield = 5; 
+          s.buffs.strata += 1; 
+          break;
+        case 'earth-2': 
+          shield = s.buffs.strata * 8; 
+          break;
+        case 'earth-3': 
+          if (s.buffs.strata >= 3) {
+            dmg = 50; isCrit = true; s.buffs.strata = 0; logMsg += ' 大地震発生！！';
+          } else {
+            dmg = 10;
+          }
+          break;
       }
 
       if (dmg > 0) {
@@ -305,7 +346,7 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
         
         setTimeout(() => setState(curr => ({ ...curr, whiteFlash: false, shakeTarget: null })), 300);
 
-        channelRef.current?.send({ type: 'broadcast', event: 'game_action', payload: { action: 'ATTACK', dmg, breakShield, applyWeakness, isCrit }});
+        channelRef.current?.send({ type: 'broadcast', event: 'game_action', payload: { action: 'ATTACK', dmg, breakShield, applyWeakness, isCrit, pierce }});
         addFloatingText(s, isCrit ? `CRITICAL ${dmg}` : `${dmg}`, isCrit ? 'crit' : 'damage', 'opponent');
       }
 
@@ -398,6 +439,9 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
           <div className={`text-center relative z-10 mt-8 ${state.shakeTarget === 'opponent' ? 'animate-shake-boss' : ''} ${state.oppLunge ? 'animate-lunge' : ''}`}>
             
             <div className="flex items-center justify-center gap-2 mb-2">
+              {state.oppBuffs.acid && <span className="bg-red-800 px-2 py-1 rounded font-bold text-white shadow-lg animate-pulse text-xs">酸性</span>}
+              {state.oppBuffs.alkali && <span className="bg-blue-800 px-2 py-1 rounded font-bold text-white shadow-lg animate-pulse text-xs">アルカリ性</span>}
+              {state.oppBuffs.strata > 0 && <span className="bg-amber-700 px-2 py-1 rounded font-bold text-white shadow-lg text-xs">地層 {state.oppBuffs.strata}</span>}
               {state.oppBuffs.weakness > 0 && <span className="text-xs bg-purple-600 px-2 py-1 rounded text-white shadow-lg">弱体化 {state.oppBuffs.weakness}</span>}
               {state.oppBuffs.counter > 0 && <span className="text-xs bg-indigo-600 px-2 py-1 rounded text-white shadow-lg">反射構え</span>}
             </div>
@@ -468,6 +512,9 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
           </div>
 
           <div className="absolute top-4 right-4 flex gap-2">
+            {state.buffs.acid && <span className="bg-red-800 px-2 py-1 rounded font-bold text-white shadow-lg animate-pulse text-xs">酸性</span>}
+            {state.buffs.alkali && <span className="bg-blue-800 px-2 py-1 rounded font-bold text-white shadow-lg animate-pulse text-xs">アルカリ性</span>}
+            {state.buffs.strata > 0 && <span className="bg-amber-700 px-2 py-1 rounded font-bold text-white shadow-lg text-xs">地層 {state.buffs.strata}</span>}
             {state.buffs.poison > 0 && <span className="bg-green-800 px-2 py-1 rounded font-bold text-white shadow-lg">毒 {state.buffs.poison}</span>}
             {state.buffs.nextAttackBonus > 0 && <span className="bg-orange-600 px-2 py-1 rounded font-bold text-white shadow-lg">攻撃力UP</span>}
             {state.buffs.counter > 0 && <span className="bg-indigo-600 px-2 py-1 rounded font-bold text-white shadow-lg">反射構え {state.buffs.counter}</span>}
@@ -494,9 +541,10 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
                     className={`w-36 h-48 rounded-xl border-2 p-2 flex flex-col transition-all absolute origin-bottom 
                       ${canPlay && !isPlaying ? 'cursor-pointer hover:z-30 hover:-translate-y-6 hover:scale-110 shadow-lg' : 'opacity-70'} 
                       ${isPlaying ? 'animate-card-fly' : ''}
-                      ${node.card.type === 'Attack' ? 'border-red-500/80 bg-gradient-to-b from-red-950 to-slate-900 hover:shadow-[0_0_25px_rgba(220,38,38,0.5)]' : 
-                        node.card.type === 'Skill' ? 'border-cyan-500/80 bg-gradient-to-b from-cyan-950 to-slate-900 hover:shadow-[0_0_25px_rgba(6,182,212,0.5)]' : 
-                        'border-amber-500/80 bg-gradient-to-b from-amber-950 to-slate-900 hover:shadow-[0_0_25px_rgba(245,158,11,0.5)]'}`}
+                      ${node.subject === 'chemistry' ? 'border-purple-500/80 bg-gradient-to-b from-purple-950 to-slate-900 hover:shadow-[0_0_25px_rgba(168,85,247,0.5)]' : 
+                        node.subject === 'physics' ? 'border-red-500/80 bg-gradient-to-b from-red-950 to-slate-900 hover:shadow-[0_0_25px_rgba(239,68,68,0.5)]' : 
+                        node.subject === 'earth' ? 'border-amber-500/80 bg-gradient-to-b from-amber-950 to-slate-900 hover:shadow-[0_0_25px_rgba(245,158,11,0.5)]' : 
+                        'border-cyan-500/80 bg-gradient-to-b from-cyan-950 to-slate-900 hover:shadow-[0_0_25px_rgba(6,182,212,0.5)]'}`}
                     style={{
                       left: `calc(50% - 4.5rem + ${(idx - (state.hand.length - 1) / 2) * 5}rem)`,
                       transform: isPlaying ? '' : `rotate(${(idx - (state.hand.length - 1) / 2) * 6}deg)`,

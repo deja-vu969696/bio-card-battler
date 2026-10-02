@@ -58,8 +58,8 @@ export default function DeckBuilder({ nodes, activeDeck, setActiveDeck }: Props)
         className={`group relative p-3 rounded-xl border-2 flex flex-col h-48 transition-all ${
           isLocked ? 'border-slate-800 bg-slate-900 opacity-50 grayscale cursor-not-allowed' :
           inDeck ? 'border-slate-700 bg-slate-800 opacity-50 cursor-not-allowed' :
-          isActive ? 'cursor-pointer hover:-translate-y-2 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)] ' + (node.card.type === 'Attack' ? 'border-red-500/80 bg-gradient-to-b from-red-950/40 to-slate-900' : node.card.type === 'Skill' ? 'border-cyan-500/80 bg-gradient-to-b from-cyan-950/40 to-slate-900' : 'border-amber-500/80 bg-gradient-to-b from-amber-950/40 to-slate-900') :
-          'cursor-pointer hover:scale-105 hover:shadow-lg ' + (node.card.type === 'Attack' ? 'border-red-500/50 hover:border-red-400 bg-slate-900' : node.card.type === 'Skill' ? 'border-cyan-500/50 hover:border-cyan-400 bg-slate-900' : 'border-amber-500/50 hover:border-amber-400 bg-slate-900')
+          isActive ? 'cursor-pointer hover:-translate-y-2 hover:shadow-[0_0_15px_rgba(255,255,255,0.2)] ' + (node.subject === 'chemistry' ? 'border-purple-500/80 bg-gradient-to-b from-purple-950/40 to-slate-900' : node.subject === 'physics' ? 'border-red-500/80 bg-gradient-to-b from-red-950/40 to-slate-900' : node.subject === 'earth' ? 'border-amber-500/80 bg-gradient-to-b from-amber-950/40 to-slate-900' : 'border-cyan-500/80 bg-gradient-to-b from-cyan-950/40 to-slate-900') :
+          'cursor-pointer hover:scale-105 hover:shadow-lg ' + (node.subject === 'chemistry' ? 'border-purple-500/50 hover:border-purple-400 bg-slate-900' : node.subject === 'physics' ? 'border-red-500/50 hover:border-red-400 bg-slate-900' : node.subject === 'earth' ? 'border-amber-500/50 hover:border-amber-400 bg-slate-900' : 'border-cyan-500/50 hover:border-cyan-400 bg-slate-900')
         }`}
       >
         {isLocked && (

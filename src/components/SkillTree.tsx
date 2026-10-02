@@ -117,9 +117,9 @@ export default function SkillTree({ nodes, onNodeClick }: Props) {
                     onClick={() => node.status === 'unlocked' && onNodeClick(node)}
                     className={`p-4 rounded-lg border-2 transition-all duration-300 relative overflow-hidden flex flex-col ${
                       node.status === 'completed' 
-                        ? 'bg-indigo-900/60 border-indigo-500/80 shadow-[0_0_15px_rgba(99,102,241,0.4)]' 
+                        ? (node.subject === 'chemistry' ? 'bg-purple-900/60 border-purple-500/80 shadow-[0_0_15px_rgba(168,85,247,0.4)]' : node.subject === 'physics' ? 'bg-red-900/60 border-red-500/80 shadow-[0_0_15px_rgba(239,68,68,0.4)]' : node.subject === 'earth' ? 'bg-amber-900/60 border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.4)]' : 'bg-indigo-900/60 border-indigo-500/80 shadow-[0_0_15px_rgba(99,102,241,0.4)]')
                         : node.status === 'unlocked'
-                        ? 'bg-slate-800 border-cyan-500/80 hover:bg-slate-700 cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.2)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] hover:-translate-y-1'
+                        ? (node.subject === 'chemistry' ? 'bg-slate-800 border-purple-500/80 hover:bg-slate-700 cursor-pointer shadow-[0_0_15px_rgba(168,85,247,0.2)] hover:shadow-[0_0_20px_rgba(168,85,247,0.5)] hover:-translate-y-1' : node.subject === 'physics' ? 'bg-slate-800 border-red-500/80 hover:bg-slate-700 cursor-pointer shadow-[0_0_15px_rgba(239,68,68,0.2)] hover:shadow-[0_0_20px_rgba(239,68,68,0.5)] hover:-translate-y-1' : node.subject === 'earth' ? 'bg-slate-800 border-amber-500/80 hover:bg-slate-700 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.2)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)] hover:-translate-y-1' : 'bg-slate-800 border-cyan-500/80 hover:bg-slate-700 cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.2)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] hover:-translate-y-1')
                         : 'bg-slate-900 border-slate-800 opacity-70 cursor-not-allowed grayscale'
                     }`}
                   >
