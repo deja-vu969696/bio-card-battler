@@ -14,7 +14,7 @@ interface FloatingText { id: number; text: string; type: 'damage'|'heal'|'shield
 interface BattleState {
   playerHp: number; playerMaxHp: number; playerShield: number; energy: number;
   drawPile: CardInstance[]; hand: CardInstance[]; discardPile: CardInstance[];
-  playerBuffs: { poison: number; extraDraw: number; extraEnergy: number; nextAttackBonus: number; counter: number; acid: boolean; alkali: boolean; strata: number; };
+  playerBuffs: { poison: number; extraDraw: number; extraEnergy: number; nextAttackBonus: number; counter: number; acid: boolean; alkali: boolean; strata: number; nextTurnEnergy: number; nextTurnDraw: number; pendingDiscard: number; weakness?: number; };
   bossHp: number; bossMaxHp: number; bossShield: number;
   bossBuffs: { starchArmor: boolean; weakness: number; poison: number };
   bossIntentIndex: number;
@@ -32,7 +32,7 @@ export default function BattleArena({ deck, onVictory, onDefeat }: Props) {
   const [state, setState] = useState<BattleState>({
     playerHp: 100, playerMaxHp: 100, playerShield: 0, energy: 3,
     drawPile: [], hand: [], discardPile: [],
-    playerBuffs: { poison: 0, extraDraw: 0, extraEnergy: 0, nextAttackBonus: 0, counter: 0, acid: false, alkali: false, strata: 0 },
+    playerBuffs: { poison: 0, extraDraw: 0, extraEnergy: 0, nextAttackBonus: 0, counter: 0, acid: false, alkali: false, strata: 0, nextTurnEnergy: 0, nextTurnDraw: 0, pendingDiscard: 0 },
     bossHp: BOSS_DATA.maxHp, bossMaxHp: BOSS_DATA.maxHp, bossShield: 0,
     bossBuffs: { starchArmor: false, weakness: 0, poison: 0 },
     bossIntentIndex: 0,
@@ -75,9 +75,26 @@ export default function BattleArena({ deck, onVictory, onDefeat }: Props) {
     return { newDraw, newDiscard, drawn };
   };
 
+
   const handleCardClick = (uid: string) => {
     if (state.turn !== 'player' || playingCardUid) return;
+    
+    // Discard mode for Precision Balance
+    if (state.playerBuffs.pendingDiscard > 0) {
+      playSlashSound();
+      setState(prev => {
+        let s = { ...prev };
+        s.hand = s.hand.filter(c => c.uid !== uid);
+        s.discardPile = [...s.discardPile, prev.hand.find(c => c.uid === uid)!];
+        s.playerBuffs.pendingDiscard -= 1;
+        s.log = ['カードを捨て札に送った。', ...s.log].slice(0,10);
+        return s;
+      });
+      return;
+    }
+
     const cardInst = state.hand.find(c => c.uid === uid);
+
     if (!cardInst) return;
     const node = deck.find(n => n.id === cardInst.nodeId);
     if (!node || state.energy < node.card.cost) return;
@@ -106,6 +123,7 @@ export default function BattleArena({ deck, onVictory, onDefeat }: Props) {
       let logMsg = `プレイヤーは [${node.card.name}] を使用した。`;
 
       switch (node.id) {
+        // --- BIOLOGY ---
         case 'cell-1': dmg = 8; break;
         case 'cell-2': shield = 12; break;
         case 'cell-3': s.playerBuffs.extraDraw += 1; break;
@@ -113,7 +131,7 @@ export default function BattleArena({ deck, onVictory, onDefeat }: Props) {
           if (s.bossBuffs.starchArmor) { dmg = 24; isCrit = true; s.bossBuffs.starchArmor = false; logMsg += ' 装甲破壊！2倍ダメージ！'; }
           else { dmg = 12; } break;
         case 'dig-2': dmg = 18; s.bossBuffs.weakness += 2; break;
-        case 'dig-3': heal = 10; s.playerBuffs.extraDraw += 1; break;
+        case 'dig-3': heal = 12; s.playerBuffs.nextTurnDraw += 1; break;
         case 'cir-1': s.playerBuffs.extraEnergy += 1; break;
         case 'cir-2': s.playerBuffs.nextAttackBonus = 0.5; break;
         case 'cir-3': s.playerBuffs.poison = 0; shield = 8; break;
@@ -122,47 +140,67 @@ export default function BattleArena({ deck, onVictory, onDefeat }: Props) {
           s.drawPile = res1.newDraw; s.discardPile = res1.newDiscard; s.hand = [...s.hand, ...res1.drawn];
           playCardDrawSound(); break;
         case 'ner-2': s.energy += 2; break;
-        case 'ner-3': shield = 15; s.playerBuffs.counter = 15; break;
+        case 'ner-3': shield = 12; s.playerBuffs.counter = 14; break;
         case 'evo-1': dmg = 10; break;
         case 'evo-2': dmg = deck.length * 6; isCrit = true; break;
-        case 'chem-1': dmg = 5; s.playerBuffs.acid = true; logMsg += ' 自身が酸性になった！'; break;
-        case 'chem-2': dmg = 5; s.playerBuffs.alkali = true; logMsg += ' 自身がアルカリ性になった！'; break;
-        case 'chem-3': 
-          if (s.playerBuffs.acid && s.playerBuffs.alkali) {
-            dmg = 30; heal = 15; isCrit = true;
-            s.playerBuffs.acid = false; s.playerBuffs.alkali = false;
-            logMsg += ' 中和反応コンボ発動！特大ダメージ＆回復！';
-          } else {
-            logMsg += ' （酸性とアルカリ性が揃っていないため効果なし）';
-          }
+        
+        // --- CHEMISTRY ---
+        case 'chem-1': 
+          s.bossShield = 0; 
+          s.bossBuffs.weakness += 2; 
+          logMsg += ' 装甲全壊＆弱体化付与！'; 
           break;
-        case 'phys-1': 
-          dmg = 6; 
-          s.playerBuffs.extraDraw += 1; 
+        case 'chem-2': 
+          s.bossBuffs.poison += 3; // 毒を3ターン付与
+          logMsg += ' 敵に毒を付与した！'; 
           break;
-        case 'phys-2': 
-          dmg = 15; 
-          pierce = true; 
-          logMsg += ' 貫通ダメージ！'; 
-          break;
-        case 'phys-3': 
-          s.energy += 1; 
-          s.playerBuffs.extraDraw += 1; 
-          break;
-        case 'earth-1': 
-          shield = 5; 
-          s.playerBuffs.strata += 1; 
-          break;
-        case 'earth-2': 
-          shield = s.playerBuffs.strata * 8; 
-          break;
+        
+        // --- PHYSICS ---
+        case 'phys-1': dmg = 7; s.playerBuffs.extraDraw += 1; break;
+        case 'phys-2': dmg = 16; pierce = true; logMsg += ' 貫通ダメージ！'; break;
+        case 'phys-3': s.energy += 2; s.playerBuffs.extraDraw += 1; break;
+        
+        // --- EARTH ---
+        case 'earth-1': shield = 8; s.playerBuffs.strata += 1; break;
+        case 'earth-2': shield = s.playerBuffs.strata * 8; break;
         case 'earth-3': 
           if (s.playerBuffs.strata >= 3) {
-            dmg = 50; isCrit = true; s.playerBuffs.strata = 0; logMsg += ' 大地震発生！！';
+            dmg = 50; isCrit = true; s.playerBuffs.strata = 0; logMsg += ' 大地震発生！！（地層全消費）';
           } else {
-            dmg = 10;
+            dmg = 15;
           }
           break;
+
+        // --- NEUTRAL ---
+        case 'neu-1':
+          const resNeu1 = executeDraw(2, s.drawPile, s.discardPile);
+          s.drawPile = resNeu1.newDraw; s.discardPile = resNeu1.newDiscard; s.hand = [...s.hand, ...resNeu1.drawn];
+          if (resNeu1.drawn.length > 0) {
+            s.playerBuffs.pendingDiscard += 1;
+            logMsg += ' 2枚引き、1枚捨てる。捨てるカードを選んでください。';
+          }
+          playCardDrawSound(); 
+          break;
+        case 'neu-2':
+          shield = 10;
+          const hasNeutral = s.hand.some(c => {
+             const n = deck.find(dn => dn.id === c.nodeId);
+             return n?.subject === 'neutral' && c.uid !== uid;
+          });
+          if (hasNeutral) { shield += 5; logMsg += ' 手札の中立カードと共鳴して追加ブロック！'; }
+          break;
+        case 'neu-3':
+          if (s.playerBuffs.poison > 0) { s.playerBuffs.poison = 0; logMsg += ' 毒を解除！'; }
+          else if (s.playerBuffs.weakness && s.playerBuffs.weakness > 0) { s.playerBuffs.weakness = 0; logMsg += ' 弱体化を解除！'; }
+          s.playerBuffs.extraDraw += 1;
+          break;
+        case 'neu-4':
+          dmg = 8;
+          s.playerBuffs.nextTurnEnergy += 1;
+          logMsg += ' 次のターン、エナジー追加獲得！';
+          break;
+
+
       }
 
       if (dmg > 0) {
@@ -235,7 +273,9 @@ export default function BattleArena({ deck, onVictory, onDefeat }: Props) {
                if (remaining >= 0) { s.playerShield = remaining; dmg = 0; }
                else { s.playerShield = 0; dmg = -remaining; }
             }
-            if (dmg > 0) {
+            }
+
+      if (dmg > 0) {
               s.playerHp = Math.max(0, s.playerHp - dmg);
               s.shakeTarget = 'screen';
               setTimeout(() => setState(curr => ({ ...curr, shakeTarget: null })), 200);
@@ -259,8 +299,19 @@ export default function BattleArena({ deck, onVictory, onDefeat }: Props) {
             addFloatingText(s, `POISON +${intent.value}`, 'crit', 'player');
           }
 
+          
           if (s.bossHp <= 0) { s.turn = 'gameover'; setTimeout(() => onVictory(), 1000); return s; }
           if (s.playerHp <= 0) { s.turn = 'gameover'; setTimeout(() => onDefeat(), 1000); return s; }
+
+          // ボス毒ダメージの処理 (8ダメージ x stack) 
+          if (s.bossBuffs.poison > 0) {
+             const poisonDmg = 8; // 固定8ダメージ
+             s.bossHp = Math.max(0, s.bossHp - poisonDmg);
+             addFloatingText(s, `-${poisonDmg} 毒`, 'damage', 'boss');
+             s.bossBuffs.poison -= 1;
+          }
+          if (s.bossHp <= 0) { s.turn = 'gameover'; setTimeout(() => onVictory(), 1000); return s; }
+
 
           s.bossIntentIndex = (s.bossIntentIndex + 1) % BOSS_DATA.pattern.length;
           s.log = [logMsg, ...s.log].slice(0, 10);
@@ -276,10 +327,11 @@ export default function BattleArena({ deck, onVictory, onDefeat }: Props) {
           if (s.playerHp <= 0) { s.turn = 'gameover'; setTimeout(() => onDefeat(), 1000); return s; }
 
           s.playerShield = 0; s.bossShield = 0; 
-          s.energy = 3 + s.playerBuffs.extraEnergy; 
+          s.energy = 3 + s.playerBuffs.extraEnergy + s.playerBuffs.nextTurnEnergy;
+          s.playerBuffs.nextTurnEnergy = 0; 
           
-          const toDraw = 4 + s.playerBuffs.extraDraw; 
-          s.playerBuffs.extraDraw = 0; 
+          const toDraw = 4 + s.playerBuffs.extraDraw + s.playerBuffs.nextTurnDraw;
+          s.playerBuffs.extraDraw = 0; s.playerBuffs.nextTurnDraw = 0; 
           
           const { newDraw, newDiscard, drawn } = executeDraw(toDraw, s.drawPile, s.discardPile);
           s.drawPile = newDraw; s.discardPile = newDiscard; s.hand = drawn;

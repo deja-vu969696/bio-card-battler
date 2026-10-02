@@ -65,9 +65,9 @@ export default function GamePage() {
   const handleTabChange = (tab: 'lab' | 'deck' | 'battle' | 'pvp') => {
     initAudio(); 
     
-    if ((tab === 'battle' || tab === 'pvp') && activeDeck.length < 5) {
+    if ((tab === 'battle' || tab === 'pvp') && activeDeck.length !== 8) {
       playSlashSound(); 
-      setToastMsg(`デッキを5枚以上セットしてください（現在 ${activeDeck.length}枚）`);
+      setToastMsg(`デッキは厳密に8枚である必要があります。（現在 ${activeDeck.length}枚）`);
       setTimeout(() => setToastMsg(null), 3000);
       return;
     }
@@ -117,7 +117,7 @@ export default function GamePage() {
     );
   }
 
-  const activeDeckNodes = completedNodes.filter(n => activeDeck.includes(n.id));
+  const activeDeckNodes = activeDeck.map(id => completedNodes.find(n => n.id === id)).filter((n): n is Node => n !== undefined);
 
   return (
     <div className="min-h-screen bg-slate-950 text-cyan-50 font-sans p-4 md:p-6 flex flex-col" onClick={() => initAudio()}>
