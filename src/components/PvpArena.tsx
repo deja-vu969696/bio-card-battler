@@ -123,8 +123,7 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
              else { s.shield = 0; dmg = -rem; }
           }
           
-          }
-
+          
       if (dmg > 0) { 
             s.hp = Math.max(0, s.hp - dmg); 
             s.log = [`相手から ${dmg} のダメージを受けた！`, ...s.log].slice(0, 10); 
@@ -161,8 +160,7 @@ export default function PvpArena({ roomCode, isHost, deck, onLeave }: Props) {
              if (rem >= 0) { s.shield = rem; dmg = 0; }
              else { s.shield = 0; dmg = -rem; }
           }
-          }
-
+          
       if (dmg > 0) {
              s.hp = Math.max(0, s.hp - dmg);
              s.shakeTarget = 'screen';
