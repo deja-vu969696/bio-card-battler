@@ -273,9 +273,7 @@ export default function BattleArena({ deck, onVictory, onDefeat }: Props) {
                if (remaining >= 0) { s.playerShield = remaining; dmg = 0; }
                else { s.playerShield = 0; dmg = -remaining; }
             }
-            }
-
-      if (dmg > 0) {
+            if (dmg > 0) {
               s.playerHp = Math.max(0, s.playerHp - dmg);
               s.shakeTarget = 'screen';
               setTimeout(() => setState(curr => ({ ...curr, shakeTarget: null })), 200);
